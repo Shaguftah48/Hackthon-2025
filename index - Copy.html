@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Amazon Rekognition Ad Demo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(to right, rgba(15,32,39,0.9), rgba(32,58,67,0.9), rgba(44,83,100,0.9)),
+                  url('https://images.unsplash.com/photo-1581090700227-1f59b8a3f080?auto=format&fit=crop&w=1350&q=80') no-repeat center center fixed;
+      background-size: cover;
+      color: #f4f4f4;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 30px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 28px;
+      color: #ffffff;
+      margin-bottom: 30px;
+    }
+
+    .controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .file-label {
+      background-color: #ff9900;
+      color: white;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s ease;
+    }
+
+    .file-label:hover {
+      background-color: #e68a00;
+    }
+
+    #addphoto {
+      background-color: #1c75bc;
+      color: white;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s ease;
+    }
+
+    #addphoto:hover {
+      background-color: #155a8a;
+    }
+
+    #photoupload {
+      display: none;
+    }
+
+    #preview-container {
+      margin-top: 10px;
+    }
+
+    #preview {
+      max-width: 300px;
+      height: auto;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(255, 255, 255, 0.15);
+      display: none;
+    }
+
+    .loader {
+      display: none;
+      border: 6px solid #f3f3f3;
+      border-top: 6px solid #ff9900;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin-top: 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    #album-list {
+      margin-top: 30px;
+    }
+
+    .gallery {
+      margin: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      display: inline-block;
+      width: 250px;
+      background: #fff;
+      color: #000;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+
+    .gallery img {
+      width: 100%;
+      border-radius: 8px 8px 0 0;
+    }
+  </style>
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+  <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1692.0.min.js"></script>
+
+  <script>
+    $(document).ready(function () {
+      AWS.config.region = 'us-east-1';
+      AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+        IdentityPoolId: 'us-east-1:169c7648-4309-45dc-8e18-33c1662f5457',
+      });
+
+      const s3 = new AWS.S3({
+        apiVersion: '2006-03-01',
+        params: { Bucket: 'detect-face-ad' }
+      });
+
+      $('#addphoto').click(function () {
+        const files = $('#photoupload').prop('files');
+        if (!files.length) {
+          return alert('Please choose a file to upload!');
+        }
+
+        const file = files[0];
+        $('#loader').show();
+
+        s3.upload({
+          Key: file.name,
+          Body: file,
+          ContentType: file.type
+        }, function (err, data) {
+          $('#loader').hide();
+          if (err) {
+            return alert('Error uploading photo: ' + err.message);
+          }
+
+          const apiinvokeurl = 'https://r0auvzixqb.execute-api.us-east-1.amazonaws.com/dev';
+          const url = apiinvokeurl + '?filename=' + file.name;
+
+          $.get(url, function (data) {
+            $('#album-list').empty();
+            const imageurl = 'https://targeted-ad.s3.us-east-1.amazonaws.com/' + data;
+
+            const html = `
+              <div class="gallery">
+                <a target="_blank" href="${imageurl}">
+                  <img src="${imageurl}" alt="Ad Image">
+                </a>
+              </div>
+            `;
+            $('#album-list').append(html);
+          });
+        });
+      });
+
+      $('#photoupload').on("change", function (e) {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            $('#preview').attr('src', e.target.result).show();
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+    });
+  </script>
+</head>
+
+<body>
+  <div class="container">
+    <h1>Targeted Ad based on Facial, Demographic & Sentiment analysis</h1>
+
+    <div class="controls">
+      <label class="file-label" for="photoupload">Choose File</label>
+      <input id="photoupload" type="file" accept="image/*" />
+
+      <div id="preview-container">
+        <img id="preview" src="#" alt="Selected Image Preview" />
+      </div>
+
+      <button id="addphoto">Fetch Advertisement</button>
+      <div class="loader" id="loader"></div>
+    </div>
+
+    <div id="album-list"></div>
+  </div>
+</body>
+</html>
